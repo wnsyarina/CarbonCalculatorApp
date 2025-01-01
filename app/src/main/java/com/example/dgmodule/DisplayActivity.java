@@ -1,22 +1,29 @@
 package com.example.dgmodule;
-
 import android.content.Intent;
 import android.os.Bundle;
-import android.view.View;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.CompoundButton;
 import android.widget.TextView;
+
 import androidx.appcompat.app.AppCompatActivity;
 
+import java.util.List;
+import java.util.concurrent.Executors;
+
 public class DisplayActivity extends AppCompatActivity {
+
+    private DGDatabase dailyGoalsdb;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_display);
 
-        // Initialize TextView
+        // Initialize the database
+        dailyGoalsdb = DGDatabase.getDatabase(this);
+
+        // Initialize TextViews
         TextView goalDisplay1 = findViewById(R.id.goalDisplay1);
         TextView goalDisplay2 = findViewById(R.id.goalDisplay2);
         TextView goalDisplay3 = findViewById(R.id.goalDisplay3);
@@ -26,25 +33,33 @@ public class DisplayActivity extends AppCompatActivity {
         CheckBox checkBoxGoal2 = findViewById(R.id.checkBoxGoal2);
         CheckBox checkBoxGoal3 = findViewById(R.id.checkBoxGoal3);
 
-        // Retrieve the data passed via Intent
-        String goal1 = getIntent().getStringExtra("GOAL1");
-        String goal2 = getIntent().getStringExtra("GOAL2");
-        String goal3 = getIntent().getStringExtra("GOAL3");
-        // Display the goal in the TextView
-        goalDisplay1.setText(goal1);
-        goalDisplay2.setText(goal2);
-        goalDisplay3.setText(goal3);
+        // Fetch the latest goals from the database
+        Executors.newSingleThreadExecutor().execute(() -> {
+            List<Goal> goals = dailyGoalsdb.goalDao().getAllGoals();
+            if (!goals.isEmpty()) {
+                Goal latestGoal = goals.get(goals.size() - 1); // Fetch the latest entry
+                runOnUiThread(() -> {
+                    goalDisplay1.setText(latestGoal.goal1);
+                    goalDisplay2.setText(latestGoal.goal2);
+                    goalDisplay3.setText(latestGoal.goal3);
+                });
+            } else {
+                runOnUiThread(() -> {
+                    goalDisplay1.setText("No goals to display");
+                    goalDisplay2.setText("No goals to display");
+                    goalDisplay3.setText("No goals to display");
+                });
+            }
+        });
 
-        // Listener to check if all checkboxes are ticked
+        // Listener for checkboxes
         CompoundButton.OnCheckedChangeListener listener = (buttonView, isChecked) -> {
             if (checkBoxGoal1.isChecked() && checkBoxGoal2.isChecked() && checkBoxGoal3.isChecked()) {
-                // Navigate to the CongratulatoryActivity
                 Intent intent = new Intent(DisplayActivity.this, CongratulatoryActivity.class);
                 startActivity(intent);
             }
         };
 
-        // Set the listener for all checkboxes
         checkBoxGoal1.setOnCheckedChangeListener(listener);
         checkBoxGoal2.setOnCheckedChangeListener(listener);
         checkBoxGoal3.setOnCheckedChangeListener(listener);
@@ -53,16 +68,15 @@ public class DisplayActivity extends AppCompatActivity {
         Button clearButton = findViewById(R.id.DGclearButton);
 
         // Set OnClickListener for "Clear All" Button
-        clearButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                // Navigate back to MainActivity
-                Intent intent = new Intent(DisplayActivity.this, MainActivity.class);
-                startActivity(intent);
-
-                // Optional: Close the current activity
-                finish();
-            }
+        clearButton.setOnClickListener(v -> {
+            Executors.newSingleThreadExecutor().execute(() -> {
+                dailyGoalsdb.goalDao().deleteAllGoals(); // Clear database
+                runOnUiThread(() -> {
+                    Intent intent = new Intent(DisplayActivity.this, MainActivity.class);
+                    startActivity(intent);
+                    finish();
+                });
+            });
         });
     }
 }
